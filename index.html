@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>デッキ選択</title>
+    <title>デッキ対戦ループ</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -30,6 +30,10 @@
       h1 {
         margin-top: 0;
         font-size: 1.4rem;
+      }
+
+      .hidden {
+        display: none;
       }
 
       .options {
@@ -67,35 +71,134 @@
         font-weight: 600;
         color: #1d4ed8;
       }
+
+      .battle-card {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 12px;
+        background: #f8faff;
+        border: 1px solid #dbe2ff;
+      }
+
+      .battle-result {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .actions {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .actions .option {
+        flex: 1;
+      }
     </style>
   </head>
   <body>
     <main class="panel">
-      <h1>最初に使うデッキを選んでください</h1>
-      <div class="options">
-        <button class="option" data-mode="standard">
-          <p class="option-title">スタンダードデッキを使う</p>
-          <p class="option-desc">すぐにプレイできる標準構成を選択します。</p>
-        </button>
+      <section id="deck-select-view">
+        <h1>最初に使うデッキを選んでください</h1>
+        <div class="options">
+          <button class="option" data-mode="standard">
+            <p class="option-title">スタンダードデッキを使う</p>
+            <p class="option-desc">すぐにプレイできる標準構成を選択します。</p>
+          </button>
 
-        <button class="option" data-mode="create">
-          <p class="option-title">デッキを作成する</p>
-          <p class="option-desc">カードを選びながら自分用にデッキを作成します。</p>
+          <button class="option" data-mode="create">
+            <p class="option-title">デッキを作成する</p>
+            <p class="option-desc">カードを選びながら自分用にデッキを作成します。</p>
+          </button>
+        </div>
+      </section>
+
+      <section id="battle-view" class="hidden">
+        <h1>対戦中</h1>
+        <div class="battle-card">
+          <p class="battle-result" id="battle-result"></p>
+          <div class="actions">
+            <button class="option" id="edit-deck-button">
+              <p class="option-title">デッキを作成する</p>
+              <p class="option-desc">デッキを調整して次の対戦に挑みます。</p>
+            </button>
+            <button class="option" id="rematch-button">
+              <p class="option-title">そのまま再戦</p>
+              <p class="option-desc">同じデッキで続けてもう1戦します。</p>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deck-builder-view" class="hidden">
+        <h1>デッキ作成</h1>
+        <p>カードを調整しました。次の対戦に進みますか？</p>
+        <button class="option" id="start-after-build">
+          <p class="option-title">このデッキで対戦する</p>
+          <p class="option-desc">作成したデッキで対戦に戻ります。</p>
         </button>
-      </div>
-      <p id="status" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <p id="status" aria-live="polite"></p>
+      </section>
     </main>
 
     <script>
+      const deckSelectView = document.getElementById('deck-select-view');
+      const battleView = document.getElementById('battle-view');
+      const deckBuilderView = document.getElementById('deck-builder-view');
+      const battleResult = document.getElementById('battle-result');
       const status = document.getElementById('status');
-      document.querySelectorAll('.option').forEach((button) => {
+
+      let deckName = 'スタンダードデッキ';
+      let battleCount = 0;
+
+      const setView = (view) => {
+        [deckSelectView, battleView, deckBuilderView].forEach((section) => {
+          section.classList.add('hidden');
+        });
+        view.classList.remove('hidden');
+      };
+
+      const startBattle = () => {
+        battleCount += 1;
+        setView(battleView);
+        battleResult.textContent = `${battleCount}戦目: ${deckName} で対戦しました。`;
+      };
+
+      document.querySelectorAll('#deck-select-view .option').forEach((button) => {
         button.addEventListener('click', () => {
           const mode = button.dataset.mode;
+          deckName = mode === 'standard' ? 'スタンダードデッキ' : '作成デッキ';
           status.textContent =
             mode === 'standard'
-              ? 'スタンダードデッキを選択しました。'
+              ? 'スタンダードデッキを選択しました。対戦を開始します。'
               : 'デッキ作成を開始します。';
+
+          if (mode === 'create') {
+            setView(deckBuilderView);
+            return;
+          }
+
+          startBattle();
         });
+      });
+
+      document.getElementById('edit-deck-button').addEventListener('click', () => {
+        status.textContent = 'デッキを調整中です。';
+        setView(deckBuilderView);
+      });
+
+      document.getElementById('start-after-build').addEventListener('click', () => {
+        deckName = '作成デッキ';
+        status.textContent = '作成デッキで対戦を開始します。';
+        startBattle();
+      });
+
+      document.getElementById('rematch-button').addEventListener('click', () => {
+        status.textContent = `${deckName}で再戦します。`;
+        startBattle();
       });
     </script>
   </body>
