@@ -113,8 +113,17 @@
         </div>
       </section>
 
-      <section id="battle-view" class="hidden">
+      <section id="battle-play-view" class="hidden">
         <h1>対戦中</h1>
+        <p>選んだデッキで対戦しています。対戦が終わったら結果画面に進みます。</p>
+        <button class="option" id="finish-battle-button">
+          <p class="option-title">対戦を終了する</p>
+          <p class="option-desc">この対戦を終了して結果を確認します。</p>
+        </button>
+      </section>
+
+      <section id="battle-view" class="hidden">
+        <h1>対戦終了</h1>
         <div class="battle-card">
           <p class="battle-result" id="battle-result"></p>
           <div class="actions">
@@ -146,6 +155,7 @@
 
     <script>
       const deckSelectView = document.getElementById('deck-select-view');
+      const battlePlayView = document.getElementById('battle-play-view');
       const battleView = document.getElementById('battle-view');
       const deckBuilderView = document.getElementById('deck-builder-view');
       const battleResult = document.getElementById('battle-result');
@@ -155,16 +165,20 @@
       let battleCount = 0;
 
       const setView = (view) => {
-        [deckSelectView, battleView, deckBuilderView].forEach((section) => {
+        [deckSelectView, battlePlayView, battleView, deckBuilderView].forEach((section) => {
           section.classList.add('hidden');
         });
         view.classList.remove('hidden');
       };
 
-      const startBattle = () => {
+      const showBattleResult = () => {
         battleCount += 1;
         setView(battleView);
         battleResult.textContent = `${battleCount}戦目: ${deckName} で対戦しました。`;
+      };
+
+      const startBattle = () => {
+        setView(battlePlayView);
       };
 
       document.querySelectorAll('#deck-select-view .option').forEach((button) => {
@@ -199,6 +213,11 @@
       document.getElementById('rematch-button').addEventListener('click', () => {
         status.textContent = `${deckName}で再戦します。`;
         startBattle();
+      });
+
+      document.getElementById('finish-battle-button').addEventListener('click', () => {
+        status.textContent = '対戦が終了しました。結果を表示します。';
+        showBattleResult();
       });
     </script>
   </body>
