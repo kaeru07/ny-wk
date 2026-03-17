@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Astral Clash - Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="panel row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">ASTRAL CLASH</h2>
+        <a class="btn" href="index.html">トップへ</a>
+      </header>
+
+      <section id="deckView" class="panel">
+        <h3>デッキ構築（30枚 / 同名最大3枚）</h3>
+        <div class="row">
+          <input id="search" placeholder="カード名検索" />
+          <select id="costFilter"><option value="all">コスト:すべて</option></select>
+          <select id="typeFilter">
+            <option value="all">タイプ:すべて</option>
+            <option value="unit">ユニット</option>
+            <option value="spell">スペル</option>
+            <option value="amulet">アミュレット</option>
+          </select>
+        </div>
+        <p id="deckCount">デッキ: 0/30</p>
+        <div class="row" style="margin-bottom:8px;">
+          <button class="btn" id="saveDeck">デッキ保存</button>
+          <button class="btn btn-primary" id="startBattle" disabled>対戦開始</button>
+          <button class="btn" id="autoBuild">自動編成</button>
+        </div>
+        <div class="panel">
+          <h4>デッキ内カード</h4>
+          <div id="deckList" class="card-grid"></div>
+        </div>
+        <div class="panel">
+          <h4>所持カード</h4>
+          <div id="poolList" class="card-grid"></div>
+        </div>
+      </section>
+
+      <section id="battleView" class="hidden">
+        <div class="panel status" id="status"></div>
+        <div class="panel">
+          <h4>CPU盤面</h4>
+          <div id="cpuBoard" class="row unit-row"></div>
+        </div>
+        <div class="panel">
+          <h4>あなたの盤面</h4>
+          <div id="playerBoard" class="row unit-row"></div>
+        </div>
+        <div class="panel">
+          <h4>あなたの手札</h4>
+          <div id="hand" class="row"></div>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn btn-primary" id="endTurn">ターン終了</button>
+          <button class="btn" id="awaken">覚醒</button>
+          <button class="btn" id="restart">再戦</button>
+        </div>
+        <div class="panel">
+          <h4>ログ</h4>
+          <div id="log" class="log"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
