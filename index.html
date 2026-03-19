@@ -128,6 +128,43 @@
         margin: 0 0 0.35rem;
         font-size: 0.9rem;
       }
+
+      .hand-cards {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .hand-card-button {
+        border: 1px solid #dbe2ff;
+        border-radius: 10px;
+        padding: 0.75rem;
+        background: #ffffff;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .hand-card-button:hover {
+        border-color: #8fa6ff;
+        background: #eef2ff;
+      }
+
+      .hand-card-title {
+        margin: 0;
+        font-weight: 700;
+      }
+
+      .hand-card-effect {
+        margin: 0.2rem 0 0;
+        font-size: 0.9rem;
+        color: #4b5563;
+      }
+
+      .empty-hand {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #6b7280;
+      }
     </style>
   </head>
   <body>
@@ -149,7 +186,7 @@
 
       <section id="battle-play-view" class="hidden">
         <h1>対戦中</h1>
-        <p>カードを出すかパスを選択し、先にライフが0になった側の負けです。</p>
+        <p>手札のカードをクリックして使うか、パスを選択してください。</p>
         <div class="battle-state">
           <p id="turn-indicator"></p>
           <p id="player-hp"></p>
@@ -157,11 +194,8 @@
           <p id="player-hand"></p>
           <p id="enemy-hand"></p>
         </div>
+        <div id="player-hand-cards" class="hand-cards"></div>
         <div class="actions">
-          <button class="option" id="play-card-button">
-            <p class="option-title">カードを出す</p>
-            <p class="option-desc">手札から1枚使って相手にダメージを与えます。</p>
-          </button>
           <button class="option" id="pass-turn-button">
             <p class="option-title">パス</p>
             <p class="option-desc">このターンは何もせず相手の行動に移ります。</p>
@@ -225,13 +259,42 @@
       const enemyHpLabel = document.getElementById('enemy-hp');
       const playerHandLabel = document.getElementById('player-hand');
       const enemyHandLabel = document.getElementById('enemy-hand');
+      const playerHandCards = document.getElementById('player-hand-cards');
       const battleLog = document.getElementById('battle-log');
-      const playCardButton = document.getElementById('play-card-button');
       const passTurnButton = document.getElementById('pass-turn-button');
 
       let deckName = 'スタンダードデッキ';
       let battleCount = 0;
       let battleState = null;
+
+      const STANDARD_CARD_POOL = [
+        { name: 'ファイアボール', damage: 3 },
+        { name: 'アイスランス', damage: 2 },
+        { name: 'サンダーストライク', damage: 4 },
+        { name: 'シールド', damage: 0, heal: 2 },
+        { name: 'スラッシュ', damage: 2 },
+        { name: 'ヒールライト', damage: 0, heal: 3 },
+        { name: 'アローショット', damage: 1 },
+        { name: 'ブレイズ', damage: 3 },
+      ];
+
+      const CREATE_CARD_POOL = [
+        { name: 'ダブルスラッシュ', damage: 4 },
+        { name: 'ポイズンミスト', damage: 2 },
+        { name: 'ライフドレイン', damage: 2, heal: 1 },
+        { name: 'ガーディアン', damage: 0, heal: 3 },
+        { name: 'メテオ', damage: 5 },
+        { name: '連撃', damage: 3 },
+        { name: '再生', damage: 0, heal: 4 },
+        { name: 'シャドウボルト', damage: 3 },
+      ];
+
+      const getPoolByDeckName = (name) => (name === '作成デッキ' ? CREATE_CARD_POOL : STANDARD_CARD_POOL);
+
+      const drawRandomCards = (pool, count) => {
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, Math.min(count, shuffled.length)).map((card) => ({ ...card }));
+      };
 
       const setView = (view) => {
         [deckSelectView, battleStartView, battlePlayView, battleView, deckBuilderView].forEach((section) => {
@@ -252,12 +315,14 @@
       };
 
       const startBattle = () => {
+        const playerPool = getPoolByDeckName(deckName);
+        const enemyPool = deckName === '作成デッキ' ? STANDARD_CARD_POOL : CREATE_CARD_POOL;
         battleState = {
           turn: 1,
           playerHp: 12,
           enemyHp: 12,
-          playerHand: 5,
-          enemyHand: 5,
+          playerHandCards: drawRandomCards(playerPool, 5),
+          enemyHandCards: drawRandomCards(enemyPool, 5),
           finished: false,
         };
         battleLog.innerHTML = '';
@@ -276,12 +341,51 @@
         turnIndicator.textContent = `ターン: ${battleState.turn}`;
         playerHpLabel.textContent = `あなたのライフ: ${battleState.playerHp}`;
         enemyHpLabel.textContent = `相手のライフ: ${battleState.enemyHp}`;
-        playerHandLabel.textContent = `あなたの手札: ${battleState.playerHand}`;
-        enemyHandLabel.textContent = `相手の手札: ${battleState.enemyHand}`;
+        playerHandLabel.textContent = `あなたの手札: ${battleState.playerHandCards.length}`;
+        enemyHandLabel.textContent = `相手の手札: ${battleState.enemyHandCards.length}`;
+        renderPlayerHand();
+      };
+
+      const describeCardEffect = (card) => {
+        const effects = [];
+        if (card.damage > 0) {
+          effects.push(`ダメージ ${card.damage}`);
+        }
+        if (card.heal > 0) {
+          effects.push(`回復 ${card.heal}`);
+        }
+        return effects.join(' / ') || '効果なし';
+      };
+
+      const renderPlayerHand = () => {
+        playerHandCards.innerHTML = '';
+
+        if (battleState.playerHandCards.length === 0) {
+          const message = document.createElement('p');
+          message.className = 'empty-hand';
+          message.textContent = '手札がありません。パスしてください。';
+          playerHandCards.appendChild(message);
+          return;
+        }
+
+        battleState.playerHandCards.forEach((card, index) => {
+          const button = document.createElement('button');
+          button.className = 'hand-card-button';
+          button.type = 'button';
+          button.innerHTML = `
+            <p class="hand-card-title">${card.name}</p>
+            <p class="hand-card-effect">${describeCardEffect(card)}</p>
+          `;
+          button.addEventListener('click', () => {
+            status.textContent = `${card.name} を使用しました。`;
+            progressTurn(index);
+          });
+          playerHandCards.appendChild(button);
+        });
       };
 
       const finishBattleIfNeeded = () => {
-        const noHand = battleState.playerHand <= 0 && battleState.enemyHand <= 0;
+        const noHand = battleState.playerHandCards.length <= 0 && battleState.enemyHandCards.length <= 0;
         const hpEnded = battleState.playerHp <= 0 || battleState.enemyHp <= 0;
         if (!noHand && !hpEnded) {
           return false;
@@ -300,28 +404,39 @@
       };
 
       const enemyTurn = () => {
-        if (battleState.enemyHand > 0 && Math.random() > 0.3) {
-          const damage = Math.floor(Math.random() * 3) + 1;
-          battleState.playerHp -= damage;
-          battleState.enemyHand -= 1;
-          appendLog(`相手がカードを出し、あなたに${damage}ダメージ。`);
+        if (battleState.enemyHandCards.length > 0 && Math.random() > 0.3) {
+          const cardIndex = Math.floor(Math.random() * battleState.enemyHandCards.length);
+          const card = battleState.enemyHandCards.splice(cardIndex, 1)[0];
+          if (card.damage > 0) {
+            battleState.playerHp -= card.damage;
+          }
+          if (card.heal > 0) {
+            battleState.enemyHp += card.heal;
+          }
+          appendLog(`相手が「${card.name}」を使用（${describeCardEffect(card)}）。`);
         } else {
           appendLog('相手はパスしました。');
         }
       };
 
-      const progressTurn = (playerAction) => {
+      const progressTurn = (playerCardIndex) => {
         if (!battleState || battleState.finished) {
           return;
         }
 
-        if (playerAction === 'play' && battleState.playerHand > 0) {
-          const damage = Math.floor(Math.random() * 3) + 1;
-          battleState.enemyHp -= damage;
-          battleState.playerHand -= 1;
-          appendLog(`あなたがカードを出し、相手に${damage}ダメージ。`);
-        } else if (playerAction === 'play') {
-          appendLog('手札がないためカードを出せません。パス扱いになります。');
+        if (typeof playerCardIndex === 'number') {
+          const card = battleState.playerHandCards.splice(playerCardIndex, 1)[0];
+          if (!card) {
+            appendLog('選択したカードが見つかりませんでした。');
+          } else {
+            if (card.damage > 0) {
+              battleState.enemyHp -= card.damage;
+            }
+            if (card.heal > 0) {
+              battleState.playerHp += card.heal;
+            }
+            appendLog(`あなたが「${card.name}」を使用（${describeCardEffect(card)}）。`);
+          }
         } else {
           appendLog('あなたはパスしました。');
         }
@@ -379,14 +494,9 @@
         startBattle();
       });
 
-      playCardButton.addEventListener('click', () => {
-        status.textContent = 'カードを使用しました。';
-        progressTurn('play');
-      });
-
       passTurnButton.addEventListener('click', () => {
         status.textContent = 'パスして相手のターンに移ります。';
-        progressTurn('pass');
+        progressTurn();
       });
     </script>
   </body>
