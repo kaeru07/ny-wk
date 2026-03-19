@@ -100,6 +100,34 @@
       .actions .option {
         flex: 1;
       }
+
+      .battle-state {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+        background: #ffffff;
+        border: 1px solid #dbe2ff;
+        font-size: 0.95rem;
+      }
+
+      .battle-state p {
+        margin: 0.2rem 0;
+      }
+
+      .battle-log {
+        margin-top: 0.75rem;
+        max-height: 160px;
+        overflow-y: auto;
+        padding: 0.75rem;
+        border-radius: 10px;
+        border: 1px solid #dbe2ff;
+        background: #ffffff;
+      }
+
+      .battle-log p {
+        margin: 0 0 0.35rem;
+        font-size: 0.9rem;
+      }
     </style>
   </head>
   <body>
@@ -121,11 +149,25 @@
 
       <section id="battle-play-view" class="hidden">
         <h1>対戦中</h1>
-        <p>選んだデッキで対戦しています。対戦が終わったら結果画面に進みます。</p>
-        <button class="option" id="finish-battle-button">
-          <p class="option-title">対戦を終了する</p>
-          <p class="option-desc">この対戦を終了して結果を確認します。</p>
-        </button>
+        <p>カードを出すかパスを選択し、先にライフが0になった側の負けです。</p>
+        <div class="battle-state">
+          <p id="turn-indicator"></p>
+          <p id="player-hp"></p>
+          <p id="enemy-hp"></p>
+          <p id="player-hand"></p>
+          <p id="enemy-hand"></p>
+        </div>
+        <div class="actions">
+          <button class="option" id="play-card-button">
+            <p class="option-title">カードを出す</p>
+            <p class="option-desc">手札から1枚使って相手にダメージを与えます。</p>
+          </button>
+          <button class="option" id="pass-turn-button">
+            <p class="option-title">パス</p>
+            <p class="option-desc">このターンは何もせず相手の行動に移ります。</p>
+          </button>
+        </div>
+        <div class="battle-log" id="battle-log" aria-live="polite"></div>
       </section>
 
       <section id="battle-start-view" class="hidden">
@@ -178,9 +220,18 @@
       const battleStartMessage = document.getElementById('battle-start-message');
       const battleResult = document.getElementById('battle-result');
       const status = document.getElementById('status');
+      const turnIndicator = document.getElementById('turn-indicator');
+      const playerHpLabel = document.getElementById('player-hp');
+      const enemyHpLabel = document.getElementById('enemy-hp');
+      const playerHandLabel = document.getElementById('player-hand');
+      const enemyHandLabel = document.getElementById('enemy-hand');
+      const battleLog = document.getElementById('battle-log');
+      const playCardButton = document.getElementById('play-card-button');
+      const passTurnButton = document.getElementById('pass-turn-button');
 
       let deckName = 'スタンダードデッキ';
       let battleCount = 0;
+      let battleState = null;
 
       const setView = (view) => {
         [deckSelectView, battleStartView, battlePlayView, battleView, deckBuilderView].forEach((section) => {
@@ -189,10 +240,10 @@
         view.classList.remove('hidden');
       };
 
-      const showBattleResult = () => {
+      const showBattleResult = (resultSummary) => {
         battleCount += 1;
+        battleResult.textContent = `${battleCount}戦目: ${deckName} で${resultSummary}`;
         setView(battleView);
-        battleResult.textContent = `${battleCount}戦目: ${deckName} で対戦しました。`;
       };
 
       const openBattleStart = () => {
@@ -201,7 +252,92 @@
       };
 
       const startBattle = () => {
+        battleState = {
+          turn: 1,
+          playerHp: 12,
+          enemyHp: 12,
+          playerHand: 5,
+          enemyHand: 5,
+          finished: false,
+        };
+        battleLog.innerHTML = '';
+        appendLog('対戦開始: あなたのターンです。');
+        renderBattleState();
         setView(battlePlayView);
+      };
+
+      const appendLog = (message) => {
+        const row = document.createElement('p');
+        row.textContent = `・${message}`;
+        battleLog.prepend(row);
+      };
+
+      const renderBattleState = () => {
+        turnIndicator.textContent = `ターン: ${battleState.turn}`;
+        playerHpLabel.textContent = `あなたのライフ: ${battleState.playerHp}`;
+        enemyHpLabel.textContent = `相手のライフ: ${battleState.enemyHp}`;
+        playerHandLabel.textContent = `あなたの手札: ${battleState.playerHand}`;
+        enemyHandLabel.textContent = `相手の手札: ${battleState.enemyHand}`;
+      };
+
+      const finishBattleIfNeeded = () => {
+        const noHand = battleState.playerHand <= 0 && battleState.enemyHand <= 0;
+        const hpEnded = battleState.playerHp <= 0 || battleState.enemyHp <= 0;
+        if (!noHand && !hpEnded) {
+          return false;
+        }
+
+        battleState.finished = true;
+        let resultSummary = '引き分けました。';
+        if (battleState.playerHp > battleState.enemyHp) {
+          resultSummary = '勝利しました！';
+        } else if (battleState.playerHp < battleState.enemyHp) {
+          resultSummary = '敗北しました。';
+        }
+        status.textContent = '対戦が終了しました。結果を表示します。';
+        showBattleResult(resultSummary);
+        return true;
+      };
+
+      const enemyTurn = () => {
+        if (battleState.enemyHand > 0 && Math.random() > 0.3) {
+          const damage = Math.floor(Math.random() * 3) + 1;
+          battleState.playerHp -= damage;
+          battleState.enemyHand -= 1;
+          appendLog(`相手がカードを出し、あなたに${damage}ダメージ。`);
+        } else {
+          appendLog('相手はパスしました。');
+        }
+      };
+
+      const progressTurn = (playerAction) => {
+        if (!battleState || battleState.finished) {
+          return;
+        }
+
+        if (playerAction === 'play' && battleState.playerHand > 0) {
+          const damage = Math.floor(Math.random() * 3) + 1;
+          battleState.enemyHp -= damage;
+          battleState.playerHand -= 1;
+          appendLog(`あなたがカードを出し、相手に${damage}ダメージ。`);
+        } else if (playerAction === 'play') {
+          appendLog('手札がないためカードを出せません。パス扱いになります。');
+        } else {
+          appendLog('あなたはパスしました。');
+        }
+
+        if (finishBattleIfNeeded()) {
+          return;
+        }
+
+        enemyTurn();
+
+        if (finishBattleIfNeeded()) {
+          return;
+        }
+
+        battleState.turn += 1;
+        renderBattleState();
       };
 
       document.querySelectorAll('#deck-select-view .option').forEach((button) => {
@@ -243,9 +379,14 @@
         startBattle();
       });
 
-      document.getElementById('finish-battle-button').addEventListener('click', () => {
-        status.textContent = '対戦が終了しました。結果を表示します。';
-        showBattleResult();
+      playCardButton.addEventListener('click', () => {
+        status.textContent = 'カードを使用しました。';
+        progressTurn('play');
+      });
+
+      passTurnButton.addEventListener('click', () => {
+        status.textContent = 'パスして相手のターンに移ります。';
+        progressTurn('pass');
       });
     </script>
   </body>
