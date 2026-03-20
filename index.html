@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>デッキ対戦ループ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
       :root {
         color-scheme: light dark;
@@ -165,6 +166,16 @@
         font-size: 0.9rem;
         color: #6b7280;
       }
+
+      .card-back {
+        background: repeating-linear-gradient(
+          -45deg,
+          #243b53,
+          #243b53 8px,
+          #334e68 8px,
+          #334e68 16px
+        );
+      }
     </style>
   </head>
   <body>
@@ -185,23 +196,19 @@
       </section>
 
       <section id="battle-play-view" class="hidden">
-        <h1>対戦中</h1>
-        <p>手札のカードをクリックして使うか、パスを選択してください。</p>
-        <div class="battle-state">
-          <p id="turn-indicator"></p>
-          <p id="player-hp"></p>
-          <p id="enemy-hp"></p>
-          <p id="player-hand"></p>
-          <p id="enemy-hand"></p>
+        <h1 class="mb-2">対戦中</h1>
+        <p class="flow-note">画面下の手札からカードを選び、行動してください。</p>
+        <div class="mt-3 h-[78dvh] overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50/50 p-2 md:p-3">
+          <div class="grid h-full grid-rows-[auto_auto_1fr_auto_1fr_1.4fr_auto] gap-2">
+            <section id="opponent-leader-info" class="rounded-xl bg-white/90 p-2 shadow-sm"></section>
+            <section id="opponent-hand-area" class="rounded-xl bg-white/85 p-2 shadow-sm"></section>
+            <section id="opponent-board-area" class="rounded-xl bg-white/85 p-2 shadow-sm"></section>
+            <section id="center-battle-info" class="rounded-xl border border-indigo-200 bg-indigo-100/70 p-2"></section>
+            <section id="player-board-area" class="rounded-xl bg-white/95 p-2 shadow-sm"></section>
+            <section id="player-hand-area" class="rounded-xl bg-white p-2 shadow-sm"></section>
+            <section id="battle-controls-area" class="rounded-xl bg-white/95 p-2 shadow-sm"></section>
+          </div>
         </div>
-        <div id="player-hand-cards" class="hand-cards"></div>
-        <div class="actions">
-          <button class="option" id="pass-turn-button">
-            <p class="option-title">パス</p>
-            <p class="option-desc">このターンは何もせず相手の行動に移ります。</p>
-          </button>
-        </div>
-        <div class="battle-log" id="battle-log" aria-live="polite"></div>
       </section>
 
       <section id="battle-start-view" class="hidden">
@@ -254,14 +261,13 @@
       const battleStartMessage = document.getElementById('battle-start-message');
       const battleResult = document.getElementById('battle-result');
       const status = document.getElementById('status');
-      const turnIndicator = document.getElementById('turn-indicator');
-      const playerHpLabel = document.getElementById('player-hp');
-      const enemyHpLabel = document.getElementById('enemy-hp');
-      const playerHandLabel = document.getElementById('player-hand');
-      const enemyHandLabel = document.getElementById('enemy-hand');
-      const playerHandCards = document.getElementById('player-hand-cards');
-      const battleLog = document.getElementById('battle-log');
-      const passTurnButton = document.getElementById('pass-turn-button');
+      const opponentLeaderInfo = document.getElementById('opponent-leader-info');
+      const opponentHandArea = document.getElementById('opponent-hand-area');
+      const opponentBoardArea = document.getElementById('opponent-board-area');
+      const centerBattleInfo = document.getElementById('center-battle-info');
+      const playerBoardArea = document.getElementById('player-board-area');
+      const playerHandArea = document.getElementById('player-hand-area');
+      const battleControlsArea = document.getElementById('battle-controls-area');
 
       let deckName = 'スタンダードデッキ';
       let battleCount = 0;
@@ -319,31 +325,138 @@
         const enemyPool = deckName === '作成デッキ' ? STANDARD_CARD_POOL : CREATE_CARD_POOL;
         battleState = {
           turn: 1,
+          currentTurn: 'player',
           playerHp: 12,
           enemyHp: 12,
           playerHandCards: drawRandomCards(playerPool, 5),
           enemyHandCards: drawRandomCards(enemyPool, 5),
+          playerBoardCards: [],
+          enemyBoardCards: [],
+          playerAwakenings: 2,
+          enemyAwakenings: 2,
+          selectedCardId: null,
           finished: false,
         };
-        battleLog.innerHTML = '';
         appendLog('対戦開始: あなたのターンです。');
         renderBattleState();
         setView(battlePlayView);
       };
 
       const appendLog = (message) => {
-        const row = document.createElement('p');
-        row.textContent = `・${message}`;
-        battleLog.prepend(row);
+        battleState.logs = battleState.logs || [];
+        battleState.logs.unshift(message);
+        battleState.logs = battleState.logs.slice(0, 5);
       };
 
       const renderBattleState = () => {
-        turnIndicator.textContent = `ターン: ${battleState.turn}`;
-        playerHpLabel.textContent = `あなたのライフ: ${battleState.playerHp}`;
-        enemyHpLabel.textContent = `相手のライフ: ${battleState.enemyHp}`;
-        playerHandLabel.textContent = `あなたの手札: ${battleState.playerHandCards.length}`;
-        enemyHandLabel.textContent = `相手の手札: ${battleState.enemyHandCards.length}`;
+        renderOpponentLeaderInfo();
+        renderOpponentHand();
+        renderBoard(opponentBoardArea, battleState.enemyBoardCards, false);
+        renderCenterBattleInfo();
+        renderBoard(playerBoardArea, battleState.playerBoardCards, true);
         renderPlayerHand();
+        renderBattleControls();
+      };
+
+      const createBoardUnitFromCard = (card, index) => ({
+        id: `${card.name}-${Date.now()}-${index}`,
+        name: card.name,
+        attack: Math.max(1, card.damage || 1),
+        hp: Math.max(1, (card.heal || 0) + 2),
+        guard: (card.heal || 0) > 0,
+        awakened: (card.damage || 0) >= 4,
+        canAttack: (card.damage || 0) > 0,
+        status: (card.heal || 0) > 0 ? '強化' : '通常',
+      });
+
+      const renderOpponentLeaderInfo = () => {
+        const enemyTurnBadge =
+          battleState.currentTurn === 'enemy'
+            ? '<span class="rounded-full bg-rose-100 px-2 py-1 text-xs font-bold text-rose-700">相手ターン</span>'
+            : '<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">待機中</span>';
+        opponentLeaderInfo.innerHTML = `
+          <div class="flex items-center justify-between">
+            <p class="text-sm font-semibold text-slate-600">相手リーダー</p>
+            ${enemyTurnBadge}
+          </div>
+          <div class="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-700">
+            <p class="rounded-lg bg-slate-100 px-2 py-1">HP: <strong>${battleState.enemyHp}</strong></p>
+            <p class="rounded-lg bg-slate-100 px-2 py-1">山札: <strong>${battleState.enemyHandCards.length}</strong></p>
+            <p class="rounded-lg bg-slate-100 px-2 py-1">覚醒: <strong>${battleState.enemyAwakenings}</strong></p>
+          </div>
+        `;
+      };
+
+      const renderOpponentHand = () => {
+        const backs = Array.from({ length: battleState.enemyHandCards.length })
+          .map(
+            () =>
+              '<div class="card-back h-12 w-8 shrink-0 rounded-md border border-slate-500/30 shadow-sm sm:h-14 sm:w-10"></div>',
+          )
+          .join('');
+        opponentHandArea.innerHTML = `
+          <div class="flex items-center justify-between text-xs text-slate-600">
+            <p class="font-semibold">相手手札（裏向き）</p>
+            <p>手札 ${battleState.enemyHandCards.length} 枚</p>
+          </div>
+          <div class="mt-2 flex items-center overflow-x-auto pr-1">
+            <div class="-space-x-3">${backs || '<p class="text-xs text-slate-400">手札なし</p>'}</div>
+          </div>
+        `;
+      };
+
+      const renderBoard = (target, boardCards, isPlayer) => {
+        const title = isPlayer ? '自分盤面' : '相手盤面';
+        const cards = boardCards
+          .slice(0, 5)
+          .map(
+            (card) => `
+            <button type="button" class="${isPlayer ? 'cursor-pointer' : 'cursor-default'} ${
+              isPlayer && battleState.selectedCardId === card.id ? 'ring-2 ring-emerald-500' : ''
+            } flex h-20 min-w-0 flex-1 flex-col justify-between rounded-lg border border-slate-200 bg-white p-1 text-left shadow-sm" data-board-id="${card.id}">
+              <p class="truncate text-[10px] font-semibold text-slate-700">${card.name}</p>
+              <div class="flex items-center justify-between text-[10px]">
+                <span class="rounded bg-rose-100 px-1 text-rose-700">ATK ${card.attack}</span>
+                <span class="rounded bg-emerald-100 px-1 text-emerald-700">HP ${card.hp}</span>
+              </div>
+              <p class="truncate text-[9px] text-slate-500">${card.guard ? '守護' : '通常'} / ${card.awakened ? '覚醒済み' : card.status} / ${
+              card.canAttack ? '攻撃可' : '待機'
+            }</p>
+            </button>`,
+          )
+          .join('');
+        target.innerHTML = `
+          <div class="flex items-center justify-between text-xs text-slate-600">
+            <p class="font-semibold">${title}</p>
+            <p>${boardCards.length}/5</p>
+          </div>
+          <div class="mt-2 flex gap-1">${cards || '<p class="text-xs text-slate-400">カードなし</p>'}</div>
+        `;
+        if (isPlayer) {
+          target.querySelectorAll('[data-board-id]').forEach((button) => {
+            button.addEventListener('click', () => {
+              battleState.selectedCardId = button.dataset.boardId;
+              status.textContent = '自分盤面カードを選択中です。';
+              renderBattleState();
+            });
+          });
+        }
+      };
+
+      const renderCenterBattleInfo = () => {
+        const currentTurnLabel = battleState.currentTurn === 'player' ? 'あなた' : '相手';
+        const logs = (battleState.logs || [])
+          .map((message) => `<p class="truncate text-[11px] text-slate-600">・${message}</p>`)
+          .join('');
+        centerBattleInfo.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <p class="font-bold text-indigo-700">TURN ${battleState.turn}</p>
+            <p class="rounded-full bg-indigo-200/70 px-2 py-1 font-semibold text-indigo-700">手番: ${currentTurnLabel}</p>
+          </div>
+          <p class="mt-1 text-center text-sm font-black tracking-widest text-indigo-400">VS</p>
+          <p class="mt-1 text-[11px] text-slate-700">ガイド: 手札をタップして使用、またはターン終了でパスします。</p>
+          <div class="mt-1 max-h-10 overflow-y-auto space-y-0.5">${logs || '<p class="text-[11px] text-slate-400">ログはここに表示されます。</p>'}</div>
+        `;
       };
 
       const describeCardEffect = (card) => {
@@ -358,29 +471,81 @@
       };
 
       const renderPlayerHand = () => {
-        playerHandCards.innerHTML = '';
+        playerHandArea.innerHTML = '';
 
         if (battleState.playerHandCards.length === 0) {
           const message = document.createElement('p');
           message.className = 'empty-hand';
           message.textContent = '手札がありません。パスしてください。';
-          playerHandCards.appendChild(message);
+          playerHandArea.appendChild(message);
           return;
         }
 
+        const wrapper = document.createElement('div');
+        wrapper.className = 'h-full';
+        wrapper.innerHTML = `
+          <div class="mb-2 flex items-center justify-between text-xs text-slate-600">
+            <p class="font-semibold">自分手札（表向き）</p>
+            <p>手札 ${battleState.playerHandCards.length} 枚</p>
+          </div>
+          <div id="player-hand-scroll" class="flex gap-2 overflow-x-auto pb-1"></div>
+        `;
+        playerHandArea.appendChild(wrapper);
+        const scroll = document.getElementById('player-hand-scroll');
         battleState.playerHandCards.forEach((card, index) => {
           const button = document.createElement('button');
-          button.className = 'hand-card-button';
+          const playable = battleState.currentTurn === 'player';
+          button.className = `w-28 shrink-0 rounded-xl border p-2 text-left shadow-sm ${
+            playable ? 'border-indigo-200 bg-white text-slate-800' : 'border-slate-200 bg-slate-100 text-slate-400'
+          }`;
           button.type = 'button';
           button.innerHTML = `
-            <p class="hand-card-title">${card.name}</p>
-            <p class="hand-card-effect">${describeCardEffect(card)}</p>
+            <p class="truncate text-xs font-bold">${card.name}</p>
+            <p class="mt-1 text-[11px]">コスト: ${Math.max(1, card.damage || card.heal || 1)}</p>
+            <p class="text-[11px]">種別: ${(card.heal || 0) > 0 ? 'アミュレット' : 'ユニット'}</p>
+            <p class="mt-1 line-clamp-2 text-[10px] text-slate-500">${describeCardEffect(card)}</p>
           `;
           button.addEventListener('click', () => {
+            if (battleState.currentTurn !== 'player') {
+              status.textContent = '相手ターン中はカードを使えません。';
+              return;
+            }
             status.textContent = `${card.name} を使用しました。`;
             progressTurn(index);
           });
-          playerHandCards.appendChild(button);
+          scroll.appendChild(button);
+        });
+      };
+
+      const renderBattleControls = () => {
+        battleControlsArea.innerHTML = `
+          <div class="grid grid-cols-3 gap-2">
+            <button class="rounded-lg bg-indigo-600 px-2 py-2 text-xs font-semibold text-white" id="pass-turn-button">ターン終了</button>
+            <button class="rounded-lg bg-amber-500 px-2 py-2 text-xs font-semibold text-white" id="awaken-button">覚醒</button>
+            <button class="rounded-lg bg-slate-200 px-2 py-2 text-xs font-semibold text-slate-700" id="cancel-button">キャンセル</button>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-600">行動: ${
+            battleState.selectedCardId ? 'カード選択中' : '手札からカードを選択してください'
+          }</p>
+        `;
+        document.getElementById('pass-turn-button').addEventListener('click', () => {
+          status.textContent = 'パスして相手のターンに移ります。';
+          progressTurn();
+        });
+        document.getElementById('awaken-button').addEventListener('click', () => {
+          if (battleState.playerAwakenings > 0) {
+            battleState.playerAwakenings -= 1;
+            status.textContent = '覚醒を使用しました。';
+            appendLog('あなたが覚醒を使用しました。');
+            renderBattleState();
+          } else {
+            status.textContent = '覚醒回数が残っていません。';
+          }
+        });
+        document.getElementById('cancel-button').addEventListener('click', () => {
+          battleState.selectedCardId = null;
+          status.textContent = '選択中の行動をキャンセルしました。';
+          renderBattleState();
         });
       };
 
@@ -404,6 +569,7 @@
       };
 
       const enemyTurn = () => {
+        battleState.currentTurn = 'enemy';
         if (battleState.enemyHandCards.length > 0 && Math.random() > 0.3) {
           const cardIndex = Math.floor(Math.random() * battleState.enemyHandCards.length);
           const card = battleState.enemyHandCards.splice(cardIndex, 1)[0];
@@ -413,6 +579,8 @@
           if (card.heal > 0) {
             battleState.enemyHp += card.heal;
           }
+          battleState.enemyBoardCards.unshift(createBoardUnitFromCard(card, cardIndex));
+          battleState.enemyBoardCards = battleState.enemyBoardCards.slice(0, 5);
           appendLog(`相手が「${card.name}」を使用（${describeCardEffect(card)}）。`);
         } else {
           appendLog('相手はパスしました。');
@@ -435,6 +603,8 @@
             if (card.heal > 0) {
               battleState.playerHp += card.heal;
             }
+            battleState.playerBoardCards.unshift(createBoardUnitFromCard(card, playerCardIndex));
+            battleState.playerBoardCards = battleState.playerBoardCards.slice(0, 5);
             appendLog(`あなたが「${card.name}」を使用（${describeCardEffect(card)}）。`);
           }
         } else {
@@ -452,6 +622,7 @@
         }
 
         battleState.turn += 1;
+        battleState.currentTurn = 'player';
         renderBattleState();
       };
 
@@ -494,10 +665,6 @@
         startBattle();
       });
 
-      passTurnButton.addEventListener('click', () => {
-        status.textContent = 'パスして相手のターンに移ります。';
-        progressTurn();
-      });
     </script>
   </body>
 </html>
